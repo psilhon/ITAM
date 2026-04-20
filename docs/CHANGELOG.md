@@ -13,6 +13,36 @@
 
 ## 版本历史
 
+### v4.5.4 (2026-04-20)
+
+**类型**: Bug 修复 + 防护增强
+
+**本次更新内容**:
+
+#### 1. 关键 Bug 修复 — 编辑服务器导致数据丢失
+- 🐛 **问题**：编辑服务器时，未填写的可选字段会被空字符串覆盖，导致已有数据被清空
+- 🛡️ **根因分析**：前端全量提交 → Controller null→"" 转换 → Prisma 全量覆盖
+- ✅ **修复**：双层防护机制
+  - **第 1 层（前端源头治理）**：编辑模式下只提交变更过的字段（diff 提交）
+  - **第 2 层（Service 兜底）**：Service 层过滤 26 个可选字段的空字符串写入
+
+#### 2. 前端优化
+- 🛠️ 编辑表单增加 `originalForm` 状态记录，提交时逐字段对比只发变更
+- 🐛 修复 `rackUnit` 字段在新建提交时被遗漏的 bug
+- ✅ `name` 和 `status` 必填字段始终发送，确保不会缺失
+
+#### 3. 版本管理
+- ✅ 项目接入 GitHub（https://github.com/psilhon/ITAM）
+- ✅ 完善 `.gitignore`（排除 .workbuddy/、backups/）
+- ✅ 添加 README.md 项目说明文档
+
+**改动文件**:
+- `frontend/src/components/ServerFormDrawer.tsx` — diff 提交逻辑
+- `backend/src/services/server.service.ts` — 空字符串过滤
+- `README.md` — 项目说明文档
+
+---
+
 ### v4.5.3 (2026-04-10)
 
 **类型**: 功能增强

@@ -1,0 +1,186 @@
+# 自动更新 CHANGELOG.md
+# 触发条件：push 到 main 分支
+# 工作原理：读取上次 workflow 运行以来的所有 commit，
+#           按 Conventional Commits 格式分类，
+#           自动在 CHANGELOG.md 顶部追加新版本记录。
+
+name: Update Changelog
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 v4.5.5），留空则自动递增修订号'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get previous tag / version
+        id: prev
+        run: |
+          # 从 CHANGELOG.md 提取最新版本号
+          PREV=$(grep -oP '### v\K[0-9]+\.[0-9]+\.[0-9]+' docs/CHANGELOG.md | head -1)
+          echo "version=v${PREV}" >> "$GITHUB_OUTPUT"
+          echo "当前最新版本: v${PREV}"
+
+      - name: Generate changelog entry
+        id: changelog
+        run: |
+          PREV_VERSION="${{ steps.prev.outputs.version }}"
+          # 获取上次 tag 到 HEAD 的 commits（如果没有 tag 则取最近 30 条）
+          if git rev-parse "$PREV_VERSION" >/dev/null 2>&1; then
+            RANGE="${PREV_VERSION}..HEAD"
+          else
+            RANGE="HEAD~30..HEAD"
+          fi
+
+          COMMITS=$(git log $RANGE --pretty=format:"%H|%s|%an" 2>/dev/null || echo "")
+
+          if [ -z "$COMMITS" ]; then
+            echo "没有新的变更需要记录"
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+          # 按类型分类 commits
+          FEATURES=""
+          FIXES=""
+          CHORES=""
+          DOCS=""
+          REFACTOR=""
+          OTHERS=""
+
+          while IFS='|' read -r hash subject author; do
+            case "$subject" in
+              feat:*|feat\(*)
+                FEATURES="${FEATURES}- ✅ ${subject#feat(}: ${subject#feat: }\n" ;;
+              fix:*|fix\(*)
+                FIXES="${FIXES}- 🐛 ${subject#fix(}: ${subject#fix: }\n" ;;
+              docs:*|docs\(*)
+                DOCS="${DOCS}- 📝 ${subject#docs(}: ${subject#docs: }\n" ;;
+              refactor:*|refactor\(*)
+                REFACTOR="${REFACTOR}- ♻️ ${subject#refactor(}: ${subject#refactor: }\n" ;;
+              chore:*|chore\(*)
+                CHORES="${CHORES}- 🔧 ${subject#chore(}: ${subject#chore: }\n" ;;
+              *)
+                OTHERS="${OTHERS}- ${subject}\n" ;;
+            esac
+          done <<< "$COMMITS"
+
+          # 组装 changelog 条目
+          TODAY=$(date +%Y-%m-%d)
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            NEW_VERSION="$INPUT_VERSION"
+          else
+            # 自动递增修订号
+            IFS='.' read -r major minor patch <<< "${PREV_VERSION#v}"
+            NEW_VERSION="v${major}.${minor}.$((patch + 1))"
+          fi
+
+          ENTRY="### ${NEW_VERSION} (${TODAY})
+
+          **类型**: 自动生成
+
+          **本次更新内容**:
+          "
+
+          if [ -n "$FEATURES" ]; then
+            ENTRY="${ENTRY}
+          #### 新功能
+          ${FEATURES}"
+          fi
+
+          if [ -n "$FIXES" ]; then
+            ENTRY="${ENTRY}
+          #### Bug 修复
+          ${FIXES}"
+          fi
+
+          if [ -n "$DOCS" ]; then
+            ENTRY="${ENTRY}
+          #### 文档
+          ${DOCS}"
+          fi
+
+          if [ -n "$REFACTOR" ]; then
+            ENTRY="${ENTRY}
+          #### 重构
+          ${REFACTOR}"
+          fi
+
+          if [ -n "$CHORES" ]; then
+            ENTRY="${ENTRY}
+          #### 杂项
+          ${CHORES}"
+          fi
+
+          if [ -n "$OTHERS" ]; then
+            ENTRY="${ENTRY}
+          #### 其他
+          ${OTHERS}"
+          fi
+
+          ENTRY="${ENTRY}
+          ---
+
+          "
+
+          # 写入临时文件
+          echo -e "$ENTRY" > /tmp/changelog_entry.md
+          echo "新版本: ${NEW_VERSION}"
+          echo "new_version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+          # 显示预览
+          echo "===== 预览 ====="
+          cat /tmp/changelog_entry.md
+
+      - name: Update CHANGELOG.md
+        if: steps.changelog.outputs.has_changes == 'true'
+        run: |
+          # 在 "## 版本历史" 行之后插入新条目
+          awk '/^## 版本历史$/ {print; system("cat /tmp/changelog_entry.md"); next}1' \
+            docs/CHANGELOG.md > /tmp/CHANGELOG_new.md
+          mv /tmp/CHANGELOG_new.md docs/CHANGELOG.md
+
+      - name: Update README version table
+        if: steps.changelog.outputs.has_changes == 'true'
+        run: |
+          NEW_VER="${{ steps.changelog.outputs.new_version }}"
+          TODAY=$(date +%Y-%m-%d)
+          # 提取最新一条 commit 的简短描述作为说明
+          DESC=$(git log -1 --pretty=format:"%s" | sed 's/^[a-z]*(\?[a-z]*\?)\?:\s*//' | head -c 60)
+
+          # 在版本表格中插入新行
+          sed -i "s/| v4.5.3 |/| ${NEW_VER} | ${TODAY} | ${DESC} |\n| v4.5.3 |/" README.md
+
+      - name: Commit and push
+        if: steps.changelog.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/CHANGELOG.md README.md
+          VERSION="${{ steps.changelog.outputs.new_version }}"
+          git commit -m "docs: 自动更新 CHANGELOG ${VERSION}" || echo "没有变更需要提交"
+          git push
