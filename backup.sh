@@ -140,7 +140,7 @@ cat > "${BACKUP_PATH}/info.txt" << EOF
 ITAM 备份信息
 =============
 备份时间: ${TIMESTAMP}
-版本号: v4.5.7
+版本号: v4.5.8
 主机: $(hostname)
 用户: $(whoami)
 备份路径: ${BACKUP_PATH}

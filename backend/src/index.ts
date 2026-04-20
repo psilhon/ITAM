@@ -32,7 +32,7 @@ const isProduction = process.env.NODE_ENV === 'production'
 const HOST = process.env.HOST || '127.0.0.1'
 
 // 应用版本号
-export const APP_VERSION = process.env.APP_VERSION || 'v4.5.7'
+export const APP_VERSION = process.env.APP_VERSION || 'v4.5.8'
 
 // ─── 启动时环境变量校验（fail-fast）──────────────────────────────
 function validateEnvironment(): void {
