@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+frontend/dist/
+
+# Database (contains business data — NEVER commit)
+*.db
+*.db-journal
+
+# Environment (contains credentials)
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# PM2
+.pm2/
+
+# WorkBuddy (agent runtime data, not project source)
+.workbuddy/
+
+# Backups (database snapshots, too large for Git)
+backups/

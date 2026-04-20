@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 服务器基础信息
+model Server {
+  id          Int      @id @default(autoincrement())
+  company     String?  // 所属公司
+  companyPinyin String? // 所属公司拼音首字母（用于排序）
+  datacenter  String?  // 机房
+  datacenterPinyin String? // 机房拼音首字母（用于排序）
+  name        String   @unique // 服务器名称/主机名（全局唯一）
+  model       String?  // 设备型号
+  brand       String?  // 品牌
+  sn          String?   // 序列号
+  cpu         String?  // CPU信息
+  cpuCores    String?  // 物理核心数
+  logicalCores String? // 逻辑核心数
+  cpuArch     String?  // CPU架构（如 x86_64, aarch64）
+  memory      String?  // 内存
+  memoryModules String? // 内存模块信息（如 "32G×8 DDR4"）
+  disk        String?  // 磁盘容量
+  diskType    String?  // 磁盘类型（如 "HDD 2.6T" / "NVMe SSD 1T"）
+  os          String?  // 操作系统
+  osKernel    String?  // 内核版本（如 "3.10.0-1160.el7.x86_64"）
+  osManagement  String?  // 操作系统管理地址
+  oobManagement String?  // 带外管理地址（BMC/IPMI/iDRAC/iLO）
+  remoteAccess  String?  // 远程接入信息（VPN/跳板机/SSH等，多行文本）
+  routeInfo     String?  // 网卡关联路由信息（多行文本）
+  nicModel      String?  // 网卡硬件型号（品牌/芯片组，如 lspci 输出）
+  cabinet     String?  // 机柜
+  rackUnit    String?  // 机架位置(U位)
+  status      String   @default("running") // running/offline/maintenance
+  onlineDate   String?  // 上线日期
+  offlineDate  String?  // 下线日期
+  owner        String?  // 资产归属
+  remark      String?  // 备注
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  networkInfos   NetworkInfo[]
+  applications   Application[]
+
+  // 常用查询字段索引
+  @@index([company])
+  @@index([companyPinyin])
+  @@index([datacenter])
+  @@index([datacenterPinyin])
+  @@index([status])
+  @@index([name])
+  @@index([owner])
+  @@index([createdAt])
+}
+
+// 网络信息（一对多）
+model NetworkInfo {
+  id           Int     @id @default(autoincrement())
+  serverId     Int
+  nicName      String  // 网卡名称 (eth0, bond0, etc.)
+  nicStatus    String? // 网卡状态（如 "UP" / "DOWN"）
+  ipAddress    String? // 网卡IP
+  netmask      String? // 子网掩码
+  gateway      String? // 网关
+  dns          String? // DNS
+  nicPurpose   String? // 网卡用途：management/business/storage/bmc/market/trading
+  remark       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  server       Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+}
+
+// 应用信息（一对多）
+model Application {
+  id             Int     @id @default(autoincrement())
+  serverId       Int
+  appName        String  // 应用名称
+  appType        String? // 应用类型：web/database/middleware/cache/other/futures_trading/stock_trading/data_related
+  status         String  @default("running") // running/stopped/error
+  deployPath     String? // 部署路径
+  accountBinding String? // 账号绑定信息（JSON字符串，仅期货交易类型使用）
+  remark         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  server     Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+}
+
+// 网络设备（交换机/路由器/防火墙/负载均衡等）
+model NetworkDevice {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique // 设备名称（全局唯一）
+  deviceType      String   // 设备类型：switch/router/firewall/lb/other
+  brand           String?  // 品牌
+  model           String?  // 型号
+  sn              String?  // 序列号
+  managementIp    String?  // 管理IP
+  ports           String?  // 端口数（如 "48×10G + 6×100G"）
+  firmware        String?  // 固件版本
+  datacenter      String?  // 机房
+  datacenterPinyin String? // 机房拼音首字母
+  cabinet         String?  // 机柜
+  rackUnit        String?  // 机架位置(U位)
+  status          String   @default("running") // running/offline/maintenance
+  onlineDate      String?  // 上线日期
+  offlineDate     String?  // 下线日期
+  owner           String?  // 资产归属
+  remark          String?  // 备注
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([deviceType])
+  @@index([datacenter])
+  @@index([status])
+  @@index([name])
+  @@index([owner])
+  @@index([createdAt])
+}
