@@ -100,7 +100,7 @@ app.use(morgan(isProduction ? 'combined' : 'dev'))
 // API 限流：防止暴力攻击
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 300, // 每个 IP 限制 300 次请求
+  max: process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX) : 300, // 每个 IP 限制请求次数（可通过环境变量覆盖）
   message: { success: false, message: '请求过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
